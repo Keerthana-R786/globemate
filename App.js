@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,30 @@ import {
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { api } from './src/api/client';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState('home');
+  const [recentTranslations, setRecentTranslations] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    api
+      .listTranslations()
+      .then((rows) => {
+        if (isMounted) setRecentTranslations(rows || []);
+      })
+      .catch(() => {
+        if (isMounted)
+          setRecentTranslations([
+            { id: 1, text: 'Where is the nearest train station?', language: 'Japanese' },
+            { id: 2, text: 'How much does this cost?', language: 'Chinese' },
+          ]);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const renderHomeScreen = () => (
     <ScrollView style={styles.container}>
@@ -48,14 +69,18 @@ export default function App() {
       
       <View style={styles.infoSection}>
         <Text style={styles.sectionTitle}>Recent Translations</Text>
-        <View style={styles.infoCard}>
-          <Text style={styles.infoText}>Where is the nearest train station?</Text>
-          <Text style={styles.infoSubtext}>Japanese</Text>
-        </View>
-        <View style={styles.infoCard}>
-          <Text style={styles.infoText}>How much does this cost?</Text>
-          <Text style={styles.infoSubtext}>Chinese</Text>
-        </View>
+        {recentTranslations.map((item) => (
+          <View key={item.id} style={styles.infoCard}>
+            <Text style={styles.infoText}>{item.text}</Text>
+            <Text style={styles.infoSubtext}>{item.language}</Text>
+          </View>
+        ))}
+        {recentTranslations.length === 0 && (
+          <View style={styles.infoCard}>
+            <Text style={styles.infoText}>No translations yet.</Text>
+            <Text style={styles.infoSubtext}>Start by adding one!</Text>
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -449,7 +474,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   activeTab: {
-    // Active tab styling
   },
   tabText: {
     fontSize: 12,

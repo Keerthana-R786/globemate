@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -21,6 +21,7 @@ import {
 } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { api } from '../api/client';
 
 export default function ProfileScreen() {
   const [userProfile, setUserProfile] = useState({
@@ -42,6 +43,21 @@ export default function ProfileScreen() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editProfile, setEditProfile] = useState({ ...userProfile });
+
+  useEffect(() => {
+    let isMounted = true;
+    api.getProfile().then((data) => {
+      if (!isMounted || !data) return;
+      const parsed = {
+        ...data,
+        preferences: data.preferences ? JSON.parse(data.preferences) : {},
+        languages: data.languages ? JSON.parse(data.languages) : [],
+      };
+      setUserProfile(parsed);
+      setEditProfile(parsed);
+    }).catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
 
   const travelHistory = [
     {
@@ -89,9 +105,23 @@ export default function ProfileScreen() {
   ];
 
   const handleSaveProfile = () => {
-    setUserProfile(editProfile);
-    setIsEditing(false);
-    Alert.alert('Success', 'Profile updated successfully!');
+    const payload = {
+      ...editProfile,
+      preferences: editProfile.preferences || {},
+      languages: editProfile.languages || [],
+    };
+    api.updateProfile(payload)
+      .then((updated) => {
+        const parsed = {
+          ...updated,
+          preferences: updated.preferences ? JSON.parse(updated.preferences) : {},
+          languages: updated.languages ? JSON.parse(updated.languages) : [],
+        };
+        setUserProfile(parsed);
+        setIsEditing(false);
+        Alert.alert('Success', 'Profile updated successfully!');
+      })
+      .catch(() => Alert.alert('Error', 'Failed to update profile'));
   };
 
   const handleCancelEdit = () => {
