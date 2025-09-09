@@ -10,10 +10,18 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from './src/api/client';
+import * as Speech from 'expo-speech';
+import { Audio } from 'expo-av';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState('home');
   const [recentTranslations, setRecentTranslations] = useState([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translatedText, setTranslatedText] = useState('');
+  const [originalText, setOriginalText] = useState('');
+  const [recording, setRecording] = useState(null);
+  const [showVoiceScreen, setShowVoiceScreen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -33,6 +41,258 @@ export default function App() {
       isMounted = false;
     };
   }, []);
+
+  // Voice recording functions
+  const startRecording = async () => {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant microphone permission to use voice translation');
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(recording);
+      setIsRecording(true);
+      setOriginalText('');
+      setTranslatedText('');
+      
+      console.log('Recording started');
+    } catch (err) {
+      console.error('Failed to start recording', err);
+      Alert.alert('Error', 'Failed to start recording');
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+
+    try {
+      setIsRecording(false);
+      await recording.stopAndUnloadAsync();
+      
+      const uri = recording.getURI();
+      console.log('Recording stopped and stored at', uri);
+      
+      // Simulate speech recognition (in a real app, you'd use a speech recognition service)
+      const recognizedText = await simulateSpeechRecognition();
+      setOriginalText(recognizedText);
+      
+      // Translate the recognized text
+      if (recognizedText) {
+        await translateText(recognizedText);
+      }
+      
+      setRecording(null);
+    } catch (err) {
+      console.error('Failed to stop recording', err);
+      Alert.alert('Error', 'Failed to stop recording');
+    }
+  };
+
+  const simulateSpeechRecognition = async () => {
+    // Simulate processing time
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Return a sample recognized text (in a real app, this would be actual speech recognition)
+    const sampleTexts = [
+      'Hello, how are you?',
+      'Where is the nearest restaurant?',
+      'How much does this cost?',
+      'Thank you very much',
+      'I need help',
+      'What time is it?',
+      'Can you help me?',
+      'I am lost'
+    ];
+    
+    return sampleTexts[Math.floor(Math.random() * sampleTexts.length)];
+  };
+
+  const translateText = async (text) => {
+    try {
+      setIsTranslating(true);
+      
+      // Simulate translation API call
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Sample translations
+      const translations = {
+        'Hello, how are you?': 'Hola, ¿cómo estás?',
+        'Where is the nearest restaurant?': '¿Dónde está el restaurante más cercano?',
+        'How much does this cost?': '¿Cuánto cuesta esto?',
+        'Thank you very much': 'Muchas gracias',
+        'I need help': 'Necesito ayuda',
+        'What time is it?': '¿Qué hora es?',
+        'Can you help me?': '¿Puedes ayudarme?',
+        'I am lost': 'Estoy perdido'
+      };
+      
+      const translated = translations[text] || 'Translation not available';
+      setTranslatedText(translated);
+      
+      // Add to recent translations
+      const newTranslation = {
+        id: Date.now(),
+        text: text,
+        translated: translated,
+        language: 'Spanish',
+        timestamp: new Date().toISOString()
+      };
+      
+      setRecentTranslations(prev => [newTranslation, ...prev.slice(0, 4)]);
+      
+      // Speak the translation
+      await Speech.speak(translated, { language: 'es' });
+      
+    } catch (err) {
+      console.error('Translation failed', err);
+      Alert.alert('Error', 'Translation failed');
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const speakTranslation = async () => {
+    if (translatedText) {
+      await Speech.speak(translatedText, { language: 'es' });
+    }
+  };
+
+  const renderVoiceTranslationScreen = () => (
+    <View style={styles.voiceScreenContainer}>
+      {/* Header */}
+      <View style={styles.voiceHeader}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => setShowVoiceScreen(false)}
+        >
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        <View style={styles.voiceHeaderContent}>
+          <Text style={styles.voiceHeaderTitle}>Voice Translation</Text>
+          <Text style={styles.voiceHeaderSubtitle}>Real-time speech translation</Text>
+        </View>
+        <View style={styles.voiceHeaderRight} />
+      </View>
+
+      {/* Main Content */}
+      <View style={styles.voiceMainContent}>
+        {/* Language Selection */}
+        <View style={styles.languageSection}>
+          <View style={styles.languageCard}>
+            <Text style={styles.languageLabel}>From</Text>
+            <View style={styles.languageSelector}>
+              <Ionicons name="globe" size={20} color="#8E24AA" />
+              <Text style={styles.languageText}>English</Text>
+              <Ionicons name="chevron-down" size={16} color="#8E24AA" />
+            </View>
+          </View>
+          
+          <TouchableOpacity style={styles.swapButton}>
+            <Ionicons name="swap-horizontal" size={24} color="#8E24AA" />
+          </TouchableOpacity>
+          
+          <View style={styles.languageCard}>
+            <Text style={styles.languageLabel}>To</Text>
+            <View style={styles.languageSelector}>
+              <Ionicons name="globe" size={20} color="#8E24AA" />
+              <Text style={styles.languageText}>Spanish</Text>
+              <Ionicons name="chevron-down" size={16} color="#8E24AA" />
+            </View>
+          </View>
+        </View>
+
+        {/* Voice Recording Area */}
+        <View style={styles.recordingArea}>
+          <View style={styles.recordingCircle}>
+            <TouchableOpacity 
+              style={[styles.recordButton, isRecording && styles.recordingActive]} 
+              onPress={isRecording ? stopRecording : startRecording}
+              disabled={isTranslating}
+            >
+              {isRecording ? (
+                <Ionicons name="stop" size={40} color="white" />
+              ) : (
+                <Ionicons name="mic" size={40} color="white" />
+              )}
+            </TouchableOpacity>
+          </View>
+          
+          <Text style={styles.recordingInstruction}>
+            {isRecording ? 'Tap to stop recording' : 'Tap to start recording'}
+          </Text>
+          
+          {isRecording && (
+            <View style={styles.recordingStatus}>
+              <View style={styles.recordingPulse} />
+              <Text style={styles.recordingStatusText}>Listening...</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Translation Results */}
+        <View style={styles.resultsArea}>
+          {originalText && (
+            <View style={styles.resultCard}>
+              <View style={styles.resultHeader}>
+                <Ionicons name="chatbubble" size={20} color="#8E24AA" />
+                <Text style={styles.resultTitle}>Original Text</Text>
+              </View>
+              <Text style={styles.resultText}>{originalText}</Text>
+            </View>
+          )}
+          
+          {isTranslating && (
+            <View style={styles.resultCard}>
+              <View style={styles.translatingContainer}>
+                <ActivityIndicator size="small" color="#8E24AA" />
+                <Text style={styles.translatingText}>Translating...</Text>
+              </View>
+            </View>
+          )}
+          
+          {translatedText && !isTranslating && (
+            <View style={styles.resultCard}>
+              <View style={styles.resultHeader}>
+                <Ionicons name="language" size={20} color="#00BCD4" />
+                <Text style={styles.resultTitle}>Translation</Text>
+                <TouchableOpacity onPress={speakTranslation} style={styles.speakButton}>
+                  <Ionicons name="volume-high" size={20} color="#8E24AA" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.resultText}>{translatedText}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.voiceQuickActions}>
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="bookmark" size={20} color="#8E24AA" />
+            <Text style={styles.actionButtonText}>Save</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="share" size={20} color="#8E24AA" />
+            <Text style={styles.actionButtonText}>Share</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="copy" size={20} color="#8E24AA" />
+            <Text style={styles.actionButtonText}>Copy</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
 
   const renderHomeScreen = () => (
     <ScrollView style={styles.container}>
@@ -93,8 +353,11 @@ export default function App() {
       </View>
       
       <View style={styles.translateContent}>
-        <TouchableOpacity style={styles.translateButton}>
-          <Ionicons name="mic" size={50} color="#2196F3" />
+        <TouchableOpacity 
+          style={styles.translateButton}
+          onPress={() => setShowVoiceScreen(true)}
+        >
+          <Ionicons name="mic" size={50} color="#8E24AA" />
           <Text style={styles.translateButtonText}>Voice Translation</Text>
         </TouchableOpacity>
         
@@ -202,11 +465,13 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#2196F3" />
-      {renderContent()}
-      
-      {/* Bottom Tab Bar */}
-      <View style={styles.tabBar}>
+      <StatusBar barStyle="light-content" backgroundColor="#8E24AA" />
+      {showVoiceScreen ? renderVoiceTranslationScreen() : (
+        <>
+          {renderContent()}
+          
+          {/* Bottom Tab Bar */}
+          <View style={styles.tabBar}>
         <TouchableOpacity 
           style={[styles.tab, currentTab === 'home' && styles.activeTab]} 
           onPress={() => setCurrentTab('home')}
@@ -247,6 +512,8 @@ export default function App() {
           <Text style={[styles.tabText, currentTab === 'culture' && styles.activeTabText]}>Culture</Text>
         </TouchableOpacity>
       </View>
+        </>
+      )}
     </SafeAreaView>
   );
 }
@@ -483,5 +750,193 @@ const styles = StyleSheet.create({
   activeTabText: {
     color: '#2196F3',
     fontWeight: 'bold',
+  },
+  // Voice Translation Screen Styles
+  voiceScreenContainer: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+  },
+  voiceHeader: {
+    backgroundColor: '#8E24AA',
+    paddingTop: 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  voiceHeaderContent: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 20,
+  },
+  voiceHeaderTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 4,
+  },
+  voiceHeaderSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  voiceHeaderRight: {
+    width: 40,
+  },
+  voiceMainContent: {
+    flex: 1,
+    padding: 20,
+  },
+  languageSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  languageCard: {
+    flex: 1,
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 12,
+    shadowColor: '#8E24AA',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  languageLabel: {
+    fontSize: 12,
+    color: '#7F8C8D',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  languageSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  languageText: {
+    fontSize: 16,
+    color: '#2C3E50',
+    marginLeft: 8,
+    flex: 1,
+    fontWeight: '500',
+  },
+  swapButton: {
+    marginHorizontal: 15,
+    padding: 10,
+    borderRadius: 20,
+    backgroundColor: '#F3E5F5',
+  },
+  recordingArea: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  recordingCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#8E24AA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#8E24AA',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  recordButton: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#8E24AA',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recordingActive: {
+    backgroundColor: '#E91E63',
+  },
+  recordingInstruction: {
+    fontSize: 16,
+    color: '#2C3E50',
+    marginTop: 20,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  recordingStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  recordingPulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E91E63',
+    marginRight: 8,
+  },
+  recordingStatusText: {
+    fontSize: 14,
+    color: '#E91E63',
+    fontWeight: '600',
+  },
+  resultsArea: {
+    flex: 1,
+    marginBottom: 20,
+  },
+  resultCard: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 15,
+    shadowColor: '#8E24AA',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  resultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  resultTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#8E24AA',
+    marginLeft: 8,
+    flex: 1,
+  },
+  resultText: {
+    fontSize: 16,
+    color: '#2C3E50',
+    lineHeight: 24,
+  },
+  translatingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  translatingText: {
+    fontSize: 14,
+    color: '#8E24AA',
+    marginLeft: 8,
+    fontStyle: 'italic',
+  },
+  voiceQuickActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E1BEE7',
+  },
+  speakButton: {
+    padding: 5,
+    borderRadius: 15,
+    backgroundColor: '#F3E5F5',
   },
 }); 
